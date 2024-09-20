@@ -2,12 +2,17 @@
 
 ## O que é?
 
-Plugin para o Gorm que adiciona recurso de auditoria de registros
+Plugin para o [Gorm](https://gorm.io/index.html) que adiciona recurso de auditoria de registros.
 
-
+---
+## Instalação
+```shell
+go get github.com/meganewsopensource/megagormaudit
+```
+---
 ## Uso
 
-### Setup
+### Setup do gorm
 ```golang
     //criação do objeto DB
     db, err := gorm.Open(postgres.New(postgres.Config{

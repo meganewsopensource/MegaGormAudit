@@ -4,10 +4,15 @@
 - [ ] Testes com AuditableModel
   - [ ] Modelo normal
     - [ ] Create
+      - [ ] dois registros
+      - [ ] listagem dos dois registros
     - [ ] Update
+      - [ ] dois registros alterando
+      - [ ] listagem dos dois registros com auditoria
+      - [ ]
     - [ ] Delete
     - [ ] List
-  - [ ] Modelo com indice unique
+  - [ ] Modelo com índice "unique"
       - [ ] Create
       - [ ] Update
       - [ ] Delete
