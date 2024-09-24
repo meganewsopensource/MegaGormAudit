@@ -9,8 +9,9 @@
     - [ ] Update
       - [ ] dois registros alterando
       - [ ] listagem dos dois registros com auditoria
-      - [ ]
+      - [ ] 
     - [ ] Delete
+      - [ ] Removendo o primeiro registro
     - [ ] List
   - [ ] Modelo com índice "unique"
       - [ ] Create
