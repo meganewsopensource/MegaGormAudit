@@ -15,9 +15,6 @@ func (a MegaGormAuditPlugin) Name() string {
 
 func (a MegaGormAuditPlugin) Initialize(db *gorm.DB) error {
 	err := db.Callback().Update().Replace("gorm:update", deleteAndCreate)
-	if err != nil {
-		panic("failed to register \"deleteAndCreate\" callback for plugin")
-	}
 	return err
 }
 

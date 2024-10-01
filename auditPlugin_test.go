@@ -1,90 +1,15 @@
 package MegaGormAudit
 
 import (
+	"errors"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	"gorm.io/plugin/soft_delete"
 	"reflect"
 	"testing"
 	"time"
 )
-
-func TestAuditableModel_BeforeDelete(t *testing.T) {
-	type fields struct {
-		ID              uint
-		AuditParentID   *uint
-		AuditParent     *AuditableModel
-		CreatedAt       time.Time
-		UpdatedAt       time.Time
-		DeletedAt       soft_delete.DeletedAt
-		LastChangedUser string
-	}
-	type args struct {
-		tx *gorm.DB
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			u := &AuditableModel{
-				ID:              tt.fields.ID,
-				AuditParentID:   tt.fields.AuditParentID,
-				AuditParent:     tt.fields.AuditParent,
-				CreatedAt:       tt.fields.CreatedAt,
-				UpdatedAt:       tt.fields.UpdatedAt,
-				DeletedAt:       tt.fields.DeletedAt,
-				LastChangedUser: tt.fields.LastChangedUser,
-			}
-			if err := u.BeforeDelete(tt.args.tx); (err != nil) != tt.wantErr {
-				t.Errorf("BeforeDelete() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestMegaGormAuditPlugin_Initialize(t *testing.T) {
-	type args struct {
-		db *gorm.DB
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := MegaGormAuditPlugin{}
-			if err := a.Initialize(tt.args.db); (err != nil) != tt.wantErr {
-				t.Errorf("Initialize() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestMegaGormAuditPlugin_Name(t *testing.T) {
-	tests := []struct {
-		name string
-		want string
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			a := MegaGormAuditPlugin{}
-			if got := a.Name(); got != tt.want {
-				t.Errorf("Name() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func TestAuditPlugin_ModelWithoutAuditory(t *testing.T) {
 
@@ -248,13 +173,13 @@ func TestAuditPlugin_ModelGormWithoutAuditory(t *testing.T) {
 				var rows []Player
 				db.Find(&rows)
 
-				return len(rows) == 0
+				return len(rows) > 0
 			},
 			afterCreate: nil,
 			wantErr:     false,
 		},
 		{
-			name: "Success, update",
+			name: "Success, Update",
 			model: &Player{
 				Model:    gorm.Model{},
 				Name:     "teste",
@@ -278,12 +203,12 @@ func TestAuditPlugin_ModelGormWithoutAuditory(t *testing.T) {
 				var rows []Player
 				db.Find(&rows)
 
-				return len(rows) == 0
+				return rows[0].Name == "teste atualizado"
 			},
 			wantErr: false,
 		},
 		{
-			name: "Success, delete",
+			name: "Success, Delete",
 			model: &Player{
 				Model:    gorm.Model{},
 				Name:     "teste",
@@ -292,6 +217,16 @@ func TestAuditPlugin_ModelGormWithoutAuditory(t *testing.T) {
 			want: []Player{},
 			afterCreate: func(db *gorm.DB, model *Player) error {
 				return db.Delete(model).Error
+			},
+			success: func(db *gorm.DB) bool {
+				var rows []Player
+				db.Find(&rows)
+
+				if len(rows) == 0 {
+					db.Unscoped().Find(&rows)
+					return len(rows) == 1 && rows[0].DeletedAt.Valid
+				}
+				return false
 			},
 			wantErr: false,
 		},
@@ -331,18 +266,218 @@ func TestAuditPlugin_ModelGormWithoutAuditory(t *testing.T) {
 					t.Errorf("[]Player() = false, want true")
 				}
 
+			} else {
+
+				var rows []Player
+				db.Find(&rows)
+
+				if !compareFunc(rows, tt.want) {
+					t.Errorf("[]Player() = %v, want %v", rows, tt.want)
+				}
+			}
+		})
+	}
+}
+
+func TestAuditPlugin_AuditableModel(t *testing.T) {
+
+	type Player struct {
+		AuditableModel
+		Name     string
+		NickName string
+	}
+
+	type PlayerDeleteReadOnly struct {
+		AuditableModel
+		Name      string
+		NickName  string
+		DeletedAt soft_delete.DeletedAt `gorm:"-:write"`
+	}
+
+	tests := []struct {
+		name            string
+		model           interface{}
+		modelsToMigrate []interface{}
+		create          func(db *gorm.DB) error
+		afterCreate     func(db *gorm.DB, model interface{}) error
+		successTest     func(db *gorm.DB, t *testing.T) bool
+		wantErr         bool
+	}{
+		{
+			name: "Success, Create",
+			model: &Player{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				db.Find(&rows)
+
+				return len(rows) > 0
+			},
+			afterCreate: nil,
+			wantErr:     false,
+		},
+		{
+			name: "Success, Update",
+			model: &Player{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*Player).Name = "teste atualizado"
+				return db.Updates(model).Error
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				db.Find(&rows)
+
+				return rows[0].Name == "teste atualizado"
+			},
+			wantErr: false,
+		},
+		{
+			name:    "Update failed on delete data",
+			wantErr: true,
+			model: &PlayerErrorOnDelete{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{PlayerErrorOnDelete{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+
+				model.(*PlayerErrorOnDelete).Name = "teste atualizado"
+				return db.Updates(model).Error
+			},
+			successTest: nil,
+		},
+		{
+			name:    "Update failed while creating new data",
+			wantErr: true,
+			model: &PlayerErrorOnCreate{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{PlayerErrorOnCreate{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+
+				model.(*PlayerErrorOnCreate).Name = "teste atualizado"
+				return db.Updates(model).Error
+			},
+			successTest: nil,
+		},
+		{
+			name: "Success on Delete",
+			model: &Player{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				return db.Delete(model).Error
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				db.Find(&rows)
+
+				if len(rows) == 0 {
+					db.Unscoped().Find(&rows)
+					return len(rows) == 1 && rows[0].DeletedAt > 0
+				}
+				return false
+			},
+			wantErr: false,
+		},
+		{
+			name:    "Success on parent ID",
+			wantErr: false,
+			model: &Player{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+
+				var rows []Player
+				err := db.Unscoped().Find(&rows).Error
+				if err == nil && len(rows) == 1 {
+
+					rows[0].Name = "updated row"
+					err = db.Updates(&rows[0]).Error
+					if err != nil {
+						return err
+					}
+
+					rows[0].Name = "updated row"
+					err = db.Updates(&rows[0]).Error
+					if err != nil {
+						return err
+					}
+				}
+				return err
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				err := db.Unscoped().Find(&rows).Error
+				if err == nil && len(rows) == 2 {
+
+					if rows[0].DeletedAt != 0 && rows[0].AuditParentID == nil &&
+						rows[1].ID == 2 && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+						return true
+					} else {
+						t.Errorf("failed on return sucess test")
+					}
+				} else {
+					t.Errorf("failed on return sucess test")
+				}
+				return false
+			},
+		},
+	}
+	for _, tt := range tests {
+
+		t.Run(tt.name, func(t *testing.T) {
+			db, err := createDatabase()
+			if err != nil {
+				t.Errorf("createDatabase() error = %v, wantErr %v", err, tt.wantErr)
+				return
 			}
 
-			var rows []Player
-			db.Find(&rows)
-
-			if !compareFunc(rows, tt.want) {
-				t.Errorf("[]Player() = %v, want %v", rows, tt.want)
+			err = db.AutoMigrate(tt.modelsToMigrate...)
+			if err != nil && !tt.wantErr {
+				t.Errorf("AutoMigrate() error = %v", err)
+				return
 			}
-			//
-			//if !reflect.DeepEqual(rows, tt.want) {
-			//	t.Errorf("normalModel() = %v, want %v", rows, tt.want)
-			//}
+
+			err = db.Create(tt.model).Error
+			if err != nil && !tt.wantErr {
+				t.Errorf("Create() error = %v", err)
+				return
+			}
+
+			if tt.afterCreate != nil {
+				err = tt.afterCreate(db, tt.model)
+				if err != nil && !tt.wantErr {
+					t.Errorf("No Expected Error = %v", err)
+					return
+				}
+
+			}
+
+			if tt.successTest == nil && tt.wantErr == false {
+				t.Errorf("SuccessTest not implemented for case")
+			} else if tt.successTest != nil && (!tt.successTest(db, t) == tt.wantErr == false) {
+				t.Errorf("[]Player() = false, want true")
+			}
+
 		})
 	}
 }
@@ -352,7 +487,10 @@ func createDatabase() (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db.Use(MegaGormAuditPlugin{})
+	err = db.Use(MegaGormAuditPlugin{})
+	if err != nil {
+		return nil, err
+	}
 	return db, nil
 }
 
@@ -361,4 +499,45 @@ func deletedAtNull() gorm.DeletedAt {
 		Time:  time.Time{},
 		Valid: false,
 	}
+}
+
+type PlayerErrorOnDelete struct {
+	AuditableModel
+	Name     string
+	NickName string
+}
+
+func (u *PlayerErrorOnDelete) BeforeDelete(tx *gorm.DB) (err error) {
+
+	tx.Statement.AddClause(clause.Update{})
+	tx.Statement.AddClause(clause.Set{
+		{Column: clause.Column{Name: "a"}, Value: ""},
+	})
+
+	tx.Statement.SetColumn("a", u.LastChangedUser)
+
+	tx.Statement.AddClause(clause.Where{Exprs: []clause.Expression{
+		clause.Eq{Column: clause.PrimaryColumn, Value: u.ID},
+		clause.Eq{Column: "a", Value: 0},
+	}})
+
+	tx.Statement.Build(
+		clause.Update{}.Name(),
+		clause.Set{}.Name(),
+		clause.Where{}.Name(),
+	)
+
+	return
+}
+
+type PlayerErrorOnCreate struct {
+	AuditableModel
+	Name     string
+	NickName string
+}
+
+func (u *PlayerErrorOnCreate) BeforeCreate(tx *gorm.DB) (err error) {
+	err = errors.New("error while before create")
+	tx.AddError(err)
+	return err
 }
