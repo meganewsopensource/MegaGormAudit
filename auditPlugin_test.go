@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm/clause"
 	"gorm.io/plugin/soft_delete"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -287,11 +288,16 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 		NickName string
 	}
 
-	type PlayerDeleteReadOnly struct {
+	type PlayerWithCorrectUniqueIndex struct {
 		AuditableModel
-		Name      string
+		Name      string `gorm:"uniqueIndex"`
 		NickName  string
-		DeletedAt soft_delete.DeletedAt `gorm:"-:write"`
+		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex"`
+	}
+	type PlayerWithWrongUniqueIndex struct {
+		AuditableModel
+		Name     string `gorm:"uniqueIndex"`
+		NickName string
 	}
 
 	tests := []struct {
@@ -477,6 +483,62 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 				}
 				return false
 			},
+		},
+		{
+			name:    "Success on index unique",
+			wantErr: false,
+			model: &PlayerWithCorrectUniqueIndex{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{PlayerWithCorrectUniqueIndex{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*PlayerWithCorrectUniqueIndex).Name = "teste 1"
+				err := db.Updates(model).Error
+				if err != nil {
+					return err
+				}
+				return err
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []PlayerWithCorrectUniqueIndex
+				err := db.Unscoped().Find(&rows).Error
+				if err == nil && len(rows) == 2 {
+					if rows[0].Name == "teste" && rows[0].DeletedAt > 0 &&
+						rows[1].ID == 2 && rows[1].Name == "teste 1" && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+						return true
+					} else {
+						t.Errorf("failed on return sucess test")
+					}
+
+				} else {
+					t.Errorf("failed on return sucess test")
+				}
+				return false
+			},
+		},
+		{
+			name:    "Fail on index unique",
+			wantErr: true,
+			model: &PlayerWithWrongUniqueIndex{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{PlayerWithWrongUniqueIndex{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*PlayerWithWrongUniqueIndex).Name = "teste"
+				err := db.Updates(model).Error
+
+				isUniqueIndexError := strings.Contains(err.Error(), "UNIQUE constraint failed")
+
+				if err != nil && isUniqueIndexError {
+					return err
+				}
+				return nil
+			},
+			successTest: nil,
 		},
 	}
 	for _, tt := range tests {
