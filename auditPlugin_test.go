@@ -416,11 +416,6 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 						return err
 					}
 
-					rows[0].Name = "updated row"
-					err = db.Updates(&rows[0]).Error
-					if err != nil {
-						return err
-					}
 				}
 				return err
 			},
@@ -431,6 +426,48 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 
 					if rows[0].DeletedAt != 0 && rows[0].AuditParentID == nil &&
 						rows[1].ID == 2 && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+						return true
+					} else {
+						t.Errorf("failed on return sucess test")
+					}
+				} else {
+					t.Errorf("failed on return sucess test")
+				}
+				return false
+			},
+		},
+		{
+			name:    "Success on multiples parent ID",
+			wantErr: false,
+			model: &Player{
+				AuditableModel: AuditableModel{},
+				Name:           "teste",
+				NickName:       "teste",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*Player).Name = "updated row"
+				err := db.Updates(model).Error
+				if err != nil {
+					return err
+				}
+
+				model.(*Player).Name = "one more time updated row"
+				err = db.Updates(model).Error
+				if err != nil {
+					return err
+				}
+
+				return err
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				err := db.Unscoped().Find(&rows).Error
+				if err == nil && len(rows) == 3 {
+
+					if rows[0].DeletedAt != 0 && rows[0].AuditParentID == nil &&
+						rows[1].ID == 2 && rows[1].DeletedAt > 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) &&
+						rows[2].ID == 3 && rows[2].DeletedAt == 0 && (rows[2].AuditParentID != nil && *rows[2].AuditParentID == 1) {
 						return true
 					} else {
 						t.Errorf("failed on return sucess test")
