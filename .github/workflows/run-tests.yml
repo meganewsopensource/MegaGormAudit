@@ -42,4 +42,4 @@ jobs:
       - name: check test coverage
         uses: vladopajic/go-test-coverage@v1
         with:
-          config: ./.testcoverage.yml
+          config: ../testcoverage.yml  # Atualizado com o caminho correto
