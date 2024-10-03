@@ -1,6 +1,6 @@
 module github.com/meganewsopensource/megagormaudit
 
-go 1.23.0
+go 1.23
 
 require (
 	gorm.io/driver/sqlite v1.5.6
