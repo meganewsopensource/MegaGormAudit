@@ -45,3 +45,26 @@ Para isso, atribua a struct `AuditableModel` em seu modelo de banco de dados.
       DeletedAt      //data e hora de deleção lógica do registro. Flag para atribuir a deleção lógica
       LastChangedUser //identificação do usuário que fez a ulima alteração dos dados.
     ```
+  #### Modelos de Entidades com unique index
+  * Para usar modelos de entidade com campos de indice único você deve, além de atribuir a tag ``gorm:"uniqueIndex"`` nos campos que você quer, sobrescrever também o campo `DeletedAt` incluindo a mesma tag de indice único.
+
+  
+   ``` golang
+      //Exemplo com um único ìndice único: 
+      type PlayerWithCorrectUniqueIndex struct {
+          AuditableModel
+          Name      string `gorm:"uniqueIndex"` //Indice no campo que eu necessito único
+          NickName  string
+          Address string
+          DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex"` //Inclua este campo do AuditableModel incluindo o mesmo indice único.
+      }
+
+      //Exemplo com ìndice único em múltipos campos:
+      type PlayerWithCorrectUniqueIndex struct {
+          AuditableModel
+          Name      string `gorm:"uniqueIndex:unq_name"` //Tag de indice único com a identificação do nome do índice
+          NickName  string `gorm:"uniqueIndex:unq_name"` //Inclua a mesma indentificação de tag nos demais campos que fazem parte da constraint de único. 
+          Address string
+          DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:unq_name"` //Inclua a mesma identificação de tag no campo DeletedAt
+      }
+   ```

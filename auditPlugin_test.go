@@ -290,14 +290,35 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 
 	type PlayerWithCorrectUniqueIndex struct {
 		AuditableModel
-		Name      string `gorm:"uniqueIndex"`
+		Name      string `gorm:"uniqueIndex:udx_name"`
 		NickName  string
-		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex"`
+		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:udx_name"`
 	}
 	type PlayerWithWrongUniqueIndex struct {
 		AuditableModel
 		Name     string `gorm:"uniqueIndex"`
 		NickName string
+	}
+	type PlayerWithWrongUniqueIndex2 struct {
+		AuditableModel
+		Name      string `gorm:"uniqueIndex"`
+		NickName  string
+		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex"`
+	}
+
+	type PlayerWithCorrectMultipleUniqueIndex struct {
+		AuditableModel
+		Name      string `gorm:"uniqueIndex:udx_name"`
+		NickName  string `gorm:"uniqueIndex:udx_name"`
+		Address   string
+		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex:udx_name"`
+	}
+	type PlayerWithWrongMultipleUniqueIndex struct {
+		AuditableModel
+		Name      string `gorm:"uniqueIndex"`
+		NickName  string `gorm:"uniqueIndex"`
+		Address   string
+		DeletedAt soft_delete.DeletedAt `gorm:"uniqueIndex"`
 	}
 
 	tests := []struct {
@@ -489,12 +510,12 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 			wantErr: false,
 			model: &PlayerWithCorrectUniqueIndex{
 				AuditableModel: AuditableModel{},
-				Name:           "teste",
-				NickName:       "teste",
+				Name:           "name test",
+				NickName:       "nick test",
 			},
 			modelsToMigrate: []interface{}{PlayerWithCorrectUniqueIndex{}},
 			afterCreate: func(db *gorm.DB, model interface{}) error {
-				model.(*PlayerWithCorrectUniqueIndex).Name = "teste 1"
+				model.(*PlayerWithCorrectUniqueIndex).NickName = "altered nick"
 				err := db.Updates(model).Error
 				if err != nil {
 					return err
@@ -505,8 +526,8 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 				var rows []PlayerWithCorrectUniqueIndex
 				err := db.Unscoped().Find(&rows).Error
 				if err == nil && len(rows) == 2 {
-					if rows[0].Name == "teste" && rows[0].DeletedAt > 0 &&
-						rows[1].ID == 2 && rows[1].Name == "teste 1" && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+					if rows[0].Name == "name test" && rows[0].DeletedAt > 0 &&
+						rows[1].ID == 2 && rows[1].Name == "name test" && rows[1].NickName == "altered nick" && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
 						return true
 					} else {
 						t.Errorf("failed on return sucess test")
@@ -519,16 +540,16 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 			},
 		},
 		{
-			name:    "Fail on index unique",
+			name:    "Fail on unique index without deletedAt unique index",
 			wantErr: true,
 			model: &PlayerWithWrongUniqueIndex{
 				AuditableModel: AuditableModel{},
-				Name:           "teste",
-				NickName:       "teste",
+				Name:           "name test",
+				NickName:       "nick test",
 			},
 			modelsToMigrate: []interface{}{PlayerWithWrongUniqueIndex{}},
 			afterCreate: func(db *gorm.DB, model interface{}) error {
-				model.(*PlayerWithWrongUniqueIndex).Name = "teste"
+				model.(*PlayerWithWrongUniqueIndex).NickName = "altered nick"
 				err := db.Updates(model).Error
 
 				isUniqueIndexError := strings.Contains(err.Error(), "UNIQUE constraint failed")
@@ -539,6 +560,120 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 				return nil
 			},
 			successTest: nil,
+		},
+		{
+			name:    "Fail on unique index with DeletedAt unique index without index name",
+			wantErr: true,
+			model: &PlayerWithWrongUniqueIndex2{
+				AuditableModel: AuditableModel{},
+				Name:           "name test",
+				NickName:       "nick test",
+			},
+			modelsToMigrate: []interface{}{PlayerWithWrongUniqueIndex2{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*PlayerWithWrongUniqueIndex2).NickName = "altered nick"
+				err := db.Updates(model).Error
+
+				isUniqueIndexError := strings.Contains(err.Error(), "UNIQUE constraint failed")
+
+				if err != nil && isUniqueIndexError {
+					return err
+				}
+				return nil
+			},
+			successTest: nil,
+		},
+
+		{
+			name:    "Success on multiples unique index",
+			wantErr: false,
+			model: &PlayerWithCorrectMultipleUniqueIndex{
+				AuditableModel: AuditableModel{},
+				Name:           "name test",
+				NickName:       "nick test",
+				Address:        "my  road street",
+			},
+			modelsToMigrate: []interface{}{PlayerWithCorrectMultipleUniqueIndex{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*PlayerWithCorrectMultipleUniqueIndex).Address = "big forest avenue"
+				err := db.Updates(model).Error
+				if err != nil {
+					return err
+				}
+				return err
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []PlayerWithCorrectMultipleUniqueIndex
+				err := db.Unscoped().Find(&rows).Error
+				if err == nil && len(rows) == 2 {
+					if rows[0].Name == "name test" && rows[0].DeletedAt > 0 &&
+						rows[1].ID == 2 && rows[1].Name == "name test" && rows[1].NickName == "nick test" && rows[1].Address == "big forest avenue" && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+						return true
+					} else {
+						t.Errorf("failed on return sucess test")
+					}
+
+				} else {
+					t.Errorf("failed on return sucess test")
+				}
+				return false
+			},
+		},
+
+		{
+			name:    "Failed on multiples unique index",
+			wantErr: true,
+			model: &PlayerWithWrongMultipleUniqueIndex{
+				AuditableModel: AuditableModel{},
+				Name:           "name test",
+				NickName:       "nick test",
+				Address:        "my  road street",
+			},
+			modelsToMigrate: []interface{}{PlayerWithWrongMultipleUniqueIndex{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*PlayerWithWrongMultipleUniqueIndex).Address = "big forest avenue"
+				err := db.Updates(model).Error
+				if err != nil {
+					return err
+				}
+				return err
+			},
+			successTest: nil,
+		},
+
+		{
+			name: "Success on update Last Changed User",
+			model: &Player{
+				AuditableModel: AuditableModel{LastChangedUser: "First User"},
+				Name:           "name test",
+				NickName:       "nick test",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+				model.(*Player).LastChangedUser = "Second User"
+				model.(*Player).Name = "altered name"
+				return db.Updates(model).Error
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				err := db.Unscoped().Find(&rows).Error
+				if err != nil {
+					t.Errorf("failed on return sucess test")
+					return false
+				}
+
+				if rows != nil && len(rows) == 2 {
+					if rows[0].Name == "name test" && rows[0].DeletedAt > 0 && rows[0].LastChangedUser == "Second User" &&
+						rows[1].ID == 2 && rows[1].Name == "altered name" && rows[1].LastChangedUser == "Second User" && rows[1].DeletedAt == 0 && (rows[1].AuditParentID != nil && *rows[1].AuditParentID == 1) {
+						return true
+					} else {
+						t.Errorf("failed on return sucess test")
+					}
+				}
+
+				return rows[0].Name == "teste atualizado"
+			},
+			wantErr: false,
 		},
 	}
 	for _, tt := range tests {
