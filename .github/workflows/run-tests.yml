@@ -37,9 +37,9 @@ jobs:
         run: go mod tidy
 
       - name: test (generate coverage)
-        run: go test ./...
+        run: go test ./... -coverprofile=./cover.out
 
       - name: check test coverage
         uses: vladopajic/go-test-coverage@v1
         with:
-          config: ./testcoverage.yml  # Atualizado com o caminho correto
+          config: ./testcoverage.yml
