@@ -675,6 +675,61 @@ func TestAuditPlugin_AuditableModel(t *testing.T) {
 			},
 			wantErr: false,
 		},
+
+		{
+			name:    "Success with save point transaction",
+			wantErr: false,
+			model: &Player{
+				AuditableModel: AuditableModel{LastChangedUser: "First User"},
+				Name:           "name test",
+				NickName:       "nick test",
+			},
+			modelsToMigrate: []interface{}{Player{}},
+			afterCreate: func(db *gorm.DB, model interface{}) error {
+
+				tx := db.Begin()
+
+				model.(*Player).Name = "altered name"
+				model.(*Player).NickName = "altered nick"
+				err := tx.Updates(model).Error
+				if err != nil {
+					t.Errorf("failed on return sucess test")
+					return err
+				}
+
+				tx.SavePoint("sp1")
+
+				model.(*Player).Name = "altered name 2"
+				model.(*Player).NickName = "altered nick 2"
+				err = tx.Updates(model).Error
+				if err != nil {
+					t.Errorf("failed on return sucess test")
+					return err
+				}
+
+				err = tx.RollbackTo("sp1").Error
+				if err != nil {
+					t.Errorf("failed on return sucess test")
+					return err
+				}
+
+				return tx.Commit().Error
+
+			},
+			successTest: func(db *gorm.DB, t *testing.T) bool {
+				var rows []Player
+				err := db.Unscoped().Find(&rows).Error
+				if err != nil {
+					t.Errorf("failed on return sucess test")
+					return false
+				}
+				if len(rows) == 2 {
+					return rows[0].Name == "name test" && rows[0].DeletedAt > 0 && rows[0].NickName == "nick test" &&
+						rows[1].Name == "altered name" && rows[1].DeletedAt == 0 && rows[1].NickName == "altered nick"
+				}
+				return false
+			},
+		},
 	}
 	for _, tt := range tests {
 

@@ -38,7 +38,6 @@ func deleteAndCreate(db *gorm.DB) {
 				db.Statement.SetColumn("audit_parent_id", auditableModel.ID)
 			}
 			db.Statement.SetColumn("deleted_at", nil)
-			db.Statement.SetColumn("last_changed_user", auditableModel.LastChangedUser)
 
 			if err := tx.Create(db.Statement.Model).Error; err != nil {
 				db.AddError(err)
