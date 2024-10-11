@@ -61,3 +61,4 @@ Para isso, atribua a struct `AuditableModel` em seu modelo de banco de dados.
       
       
    ```
+  [Ver Documentação](http://wiki.meganews/e/pt-br/producao/produtos/bendego/RecursoAuditoriaDeDados)
