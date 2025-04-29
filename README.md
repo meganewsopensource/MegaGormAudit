@@ -1,5 +1,15 @@
 # Mega Gorm Audit
 
+---
+
+## CONCLUSÃO - 29/04/2025
+Até o presente momento existe uma única situação que impede a utilização desse código (como está) em produção:
+
+Como toda alteração no registro é gerado um novo registro com uma nova chave primária, quando o registo for referenciado em uma outra tabela como chave estrangeira, qualquer alteração perderia a referencia desse registro, já que o registro referenciado não sofrerá alteração e um novo será gerado com um novo ID.
+
+---
+
+
 ## O que é?
 
 Plugin para o [Gorm](https://gorm.io/index.html) que adiciona recurso de auditoria de registros.
@@ -61,3 +71,4 @@ Para isso, atribua a struct `AuditableModel` em seu modelo de banco de dados.
       
       
    ```
+  [Ver Documentação](http://wiki.meganews/e/pt-br/producao/produtos/bendego/RecursoAuditoriaDeDados)
